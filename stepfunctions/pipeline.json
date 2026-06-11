@@ -1,0 +1,69 @@
+{
+  "Comment": "Sales pipeline: Job1 sequential, then Job2 + Job3 parallel",
+  "StartAt": "RawLoadJob",
+  "States": {
+    "RawLoadJob": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::glue:startJobRun.sync",
+      "Parameters": {
+        "JobName": "heena-sales-etl-raw"
+      },
+      "ResultPath": "$.rawLoadResult",
+      "Next": "AggregationJobs",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Next": "PipelineFailed",
+          "ResultPath": "$.error"
+        }
+      ]
+    },
+    "AggregationJobs": {
+      "Type": "Parallel",
+      "Branches": [
+        {
+          "StartAt": "AggByRegionJob",
+          "States": {
+            "AggByRegionJob": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::glue:startJobRun.sync",
+              "Parameters": {
+                "JobName": "heena-sales-etl-agg-region"
+              },
+              "End": true
+            }
+          }
+        },
+        {
+          "StartAt": "AggByCountryItemJob",
+          "States": {
+            "AggByCountryItemJob": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::glue:startJobRun.sync",
+              "Parameters": {
+                "JobName": "heena-sales-etl-agg-region-country"
+              },
+              "End": true
+            }
+          }
+        }
+      ],
+      "Next": "PipelineSucceeded",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Next": "PipelineFailed",
+          "ResultPath": "$.error"
+        }
+      ]
+    },
+    "PipelineSucceeded": {
+      "Type": "Succeed"
+    },
+    "PipelineFailed": {
+      "Type": "Fail",
+      "Error": "PipelineFailed",
+      "Cause": "A Glue job failed — check CloudWatch logs"
+    }
+  }
+}
